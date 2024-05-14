@@ -1,17 +1,31 @@
-FROM    debian:bullseye
 
-RUN     apt update -y
-RUN     apt upgrade -y
-RUN     apt install vim -y
+# this dockerfile is used to build the image for the nginx container
+FROM	debian:bullseye
 
-RUN     apt install nginx -y
+EXPOSE	443
 
-RUN     apt install openssl -y
-RUN     mkdir -p /etc/nginx/ssl
-RUN     openssl req -x509 -nodes -out /etc/nginx/ssl/inception.crt -keyout /etc/nginx/ssl/inception.key -subj "/C=FR/ST=IDF/L=Paris/O=42/OU=42/CN=rmarecar.42.fr/UID=rmarecar"
-COPY    conf/nginx.conf /etc/nginx/nginx.conf
+RUN		apt update && apt install -y --no-install-recommends --no-install-suggests \
+		nginx \
+		openssl && \
+		rm -rf /var/lib/apt/lists/*
 
-RUN     chmod 755 /var/www/html
-RUN     chown -R www-data /var/www/html
+ARG		CERT_FOLDER CERTIFICATE KEY COUNTRY STATE LOCALITY ORGANIZATION UNIT COMMON_NAME
 
-CMD [ "nginx", "-g", "daemon off;" ]
+RUN mkdir -p ${CERT_FOLDER} && \
+	openssl req -newkey rsa:4096 -x509 -sha256 -days 365 -nodes \
+    -out ${CERTIFICATE} \
+    -keyout ${KEY} \
+    -subj "/C=${COUNTRY}/ST=${STATE}/L=${LOCALITY}/O=${ORGANIZATION}/OU=${UNIT}/CN=${COMMON_NAME}"
+
+COPY	conf/nginx.conf	/etc/nginx/
+COPY	conf/server.conf	/etc/nginx/conf.d/
+
+RUN		echo "\tserver name ${COMMON_NAME};\n\
+			\tssl_certificate ${CERTIFICATE};\n\
+			\tssl_certificate_key ${KEY};\n\
+			}" >> /etc/nginx/conf.d/server.conf
+
+RUN		mkdir -p /var/www/
+RUN		chown -R www-data:www-data /var/www/
+
+CMD		["nginx", "-g", "daemon off;"]
